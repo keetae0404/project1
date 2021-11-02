@@ -23,11 +23,15 @@ tidy=TRUE, tidy.opts=list(width.cutoff=60), R.options=list(max.print=100))
 
 #### Introduction 
 
-Paragraph or two introducing your datasets and variables, why they are interesting to you, etc.
+One of the most troubling and often ignored issues in our world are the rising CO2 levels in our earth's atmosphere. It is surmised that more industrialized and developed countries often emit the most CO2 emissions. I am interested in this topic because I believe that climate change should be of greater importance in our society. This project compares various countries' carbon dioxide emissions in tons, yearly change of CO2 emissions from 2015 to 2016 in tons, and their level of development through their GDP per capita and life expectancy. Such datasets were obtained via Kaggle and Gapminder. I expect to see positive trends between population and CO2 emissions and potentially negative trends between life expectancy and CO2 emissions. 
 
 ```{R}
 # read your datasets in here, e.g., with read_csv()
-
+library(tidyverse)
+library(knitr)
+library(ggplot2)
+emissions <- read_csv("CO2Life.csv")
+gdp <- read_csv("incomegdp.csv")
 ```
 
 #### Tidying: Reshaping
@@ -37,54 +41,72 @@ If your datasets are tidy already, demonstrate that you can reshape data with pi
 ```{R}
 # your tidying code (if applicable; can also wait until wrangling section)
 ```
-
+The tidying will be performed in the wrangling section when reshaping the summary statistics.
     
 #### Joining/Merging
 
 ```{R}
 # your joining code
-
-# your joining code
+joined_data <- inner_join(emissions, gdp)
+glimpse(emissions)
+emissions %>% distinct(Country)
+#glimpse(gdp) --> not included because of size of data frame
+gdp %>% distinct(Country)
+anti_join(emissions, gdp)
+anti_join(gdp, emissions)
 ```
 
-Discussions of joining here. Feel encouraged to break up into more than once code chunk and discuss each in turn.
+An inner_join was utilized with the common ID `Country` in order to eliminate rows in each dataset that do not match with those from the other dataset. In the original `emissions` dataset, there were 208 rows and unique IDs, and in the original `gdp` dataset, there were 195 rows and unique IDs. There were 32 rows in `emissions` that were not present in `gdp`, and there were 19 rows in `gdp` that were not present in `emissions`. These values were found by utilizing two anti_joins that find rows that do not have matches. As a result, there were 32 rows dropped, and the final size of the joined dataset has 176 common rows. The final size is less than both of the original datasets but still retains most of the countries. Potential problems that may arise because of these dropped rows may include a lack of inclusion for smaller countries. The data may then favor those with larger economies and thus skew the data.
+
+The rows in `emissions` that were not present in `gdp` included Anguilla, Aruba, Bermuda, British Virgin Islands, Cayman Islands, Congo, Cook Islands, Czech Republic (Czechia), Faerow Islands, Falkland Islands, French Guiana, French Polynesia, Gibraltar, Greenland, Guadeloupe, Hong Kong, Kyrgyzstan, Laos, Macao, Martinique, New Caledonia, Puerto Rico, Reunion, Saint Helena, Saint Kitts & Nevis, Saint Lucia, Saint Pierre & Miquelon, Saint Vincent and the Grenadines, Sao Tome & Principe, and Slovakia. The rows in `gdp` that were not present in `emissions` included Andorra, Congo (Dem. Rep.), Congo (Rep.), Czech Republic, Micronesia (Fed. Sts.), (Hong Kong, China), Kyrgyz Republic, St. Kidds and Nevis, Lao, St. Lucia, Monaco, Marshall Islands, Nauru, Palestine, San Marino, Sao Tome and Principe, Slovak Republic, Tuvalu, and St. Vincent and the Grenadines.
 
 ####  Wrangling
 
 ```{R}
 # your wrangling code
+joined_data <- joined_data %>% select(1,3:7, "GDP" = "2016") %>% mutate("RelativeEmissionsToMean" = ifelse(CO2Emissions >= 195047774, "High", "Low"))
 
-# your wrangling code
+joined_data %>% summarize_at(c("CO2Emissions", "YearlyChange", "Percapita", "Population", "LifeExpectancy"), na.rm = T, .funs = list(Mean = mean, SD = sd, Max = max, Min = min, n = n_distinct)) %>% pivot_longer(contains("_")) %>% separate(name, into = c("variable", "stat")) %>% pivot_wider(names_from = "variable", values_from = "value") %>% knitr::kable()
 
-# your wrangling code
+joined_data %>% group_by(RelativeEmissionsToMean, GDP) %>% summarize(count = n()) %>% arrange(-count)
+joined_data %>% group_by(RelativeEmissionsToMean) %>% summarize(count = n()) %>% arrange(-count)
+
+joined_data %>% summarize_all(function(x)sum(is.na(x)))
+
+joined_data %>% filter(Population >= 41647284) %>% filter(str_detect(RelativeEmissionsToMean, "[a-zA-Z]{4}"))
+
 ```
+**Procedure:** For the first chunk of code, I wanted to clean up the `joined_data` data frame by only utilizing the numeric variables `CO2Emissions`, `YearlyChange`, `Percapita`, `Population`, and `LifeExpectancy`. However, for the long list of numbers that pertained to a country's GDP that year, I only wanted to select the year 2016 because the other variables from the other dataset `emissions` were taken from the year 2016. I changed the name to `GDP` to make this change clear. Additionally, because there was a lack of categorical variables, I used mutate in conjunction with ifelse to create a new variable called `RelativeEmissionsToMean` that had two variables: `High` for CO2 emissions greater than or equal to the mean and `Low` for CO2 emissions less than the mean. The remaining chunks were the summary statistics. The second chunk created a table using kable() by summarizing the numeric variables `CO2Emissions`, `YearlyChange`, `Percapita`, `Population`, and `LifeExpectancy` and finding their means, standard deviations, maximum, minimum, and total number of distinct values. As mentioned above, the tidyr functions pivot_longer() and pivot_wider() in conjunction with separate() were utilized here in order to reshape the summary statistics. Contains("_") and separate() were utilized to separate the var_mean/sd/etc. into two columns. The third chunk counts the categorical variable `RelativeEmissionsToMean` initially by grouping the values by it and then arranging the counts in descending order. It should be noted that this is considered the only categorical variable. The `GDP` variable is a character object, but it will be converted to a numeric in visualization. However, in order to specify what the GDP was of the countries with high and low emissions, the `GDP` variable will also be grouped along with the `RelativeEmissionsToMean` variable. The fourth chunk utilized a defined function inside summarize_all in order to report the number of NAs for each column. The final chunk utilized the regex function str_detect() to match countries with a larger than average population (41546284 was obtained from the summary statistics) with high CO2 emissions. 
 
-Your discussion of wrangling section here. Feel encouraged to break up into more than once code chunk and discuss each in turn.
-
+**Findings:** There were some interesting findings from the wrangling process. One of the more glaring statistics noticed was that only 30 countries in the world accounted for more than the average carbon dioxide emissions in the world whereas 146 countries in the world contributed to less than the mean. Because of this, it can be surmised that if these 30 countries were to focus on the reduction of carbon emissions, then perhaps a significant change would happen to our atmosphere. Additionally, another finding that should be noted is that the average yearly change from 2015 to 2016 of carbon emissions around the world was 2.572557 tons per year. This also contributes to the fact that our world is being damaged by our own carbon footprints. Despite the minimum yearly change of carbon emissions of a country (-6.380000	tons per year), the average is still greater than 0, which means that other countries' yearly changes are significant enough to offset the reduction of this one country.
 
 #### Visualizing
 
 ```{R}
 # your plot 1
-```
+joined_data
 
-Your discussion of plot 1
+ggplot(joined_data, aes(x = Population, y = CO2Emissions)) + geom_point() + ggtitle("CO2 Emissions vs Population") + xlab("Population of Country") + 
+  scale_y_continuous(name = "CO2 Emissions (tons)", breaks = seq(0, 100000000000, 1000000000)) + geom_smooth(method = "lm") + theme_minimal()
+```
+Plot 1 depicts the relationship between the population of a country and the CO2 emissions in a scatterplot. In theory, the more people are present in a country, the greater the amount of carbon emissions. However, as seen in the graph, this proposed relationship is heavily influenced by outliers. Countries with very large populations such as China or India seem to pull the distribution significantly to the point where they cancel out. However, although the distribution seems to fan out, there appears to be a slight positive relationship between a country's population and their carbon emissions. This is further supported by the utilization of geom_smooth(), which provides a shaded area that signifies the 95% confidence interval of the linear regression line. Though a country's population should not and cannot be controlled via forceful means, this graph is a good indicator of how our increasing global population will only raise carbon emissions, which only provides more urgency to stop this rapid increase.
 
 ```{R}
 # your plot 2
+ggplot(joined_data, aes(x = RelativeEmissionsToMean, y = YearlyChange, fill = RelativeEmissionsToMean)) + geom_bar(aes(y = YearlyChange), stat = "summary", fun = mean) + ggtitle("Visual Representation of High vs. Low Emissions") + xlab("Relative Emissions to the Mean") + scale_y_continuous(name = "Yearly Change in Emissions (tons)", breaks = seq(0, 3.25, 0.25)) + theme_classic() + geom_errorbar(stat = "summary", fun.data = mean_se, width = 0.5)
 ```
-
-Your discussion of plot 2
+Adding to the findings in the aforementioned wrangling section, Plot 2 compares the yearly change in carbon emissions between countries that are `High` or `Low` in carbon emissions relative to the mean. This bar graph is intended to not only show signify the amount of carbon emissions that are contributed by a country but also the pace at which they operate. Based on the graph, it is shown that countries with lower emissions have a significantly higher yearly change in emissions than countries with higher emissions. This may be a dangerous warning sign as these countries tend to offset higher emitting countries. Currently, nations with higher GDPs and higher infrastructure are typically larger nations that have difficulties with changing their carbon footprint. However, if nations with lower GDPs and lower infrastructures are rapidly increasing their carbon footprint, these changes may not be able to be controlled. Additionally, an errorbar was attached to the graph in order to ascertain the standard error. The countries with higher relative emissions appears to have a large standard error, indicating that the range is very wide and potentially erroneous. However, because the two bars' errorbars do not overlap, our previously indicated conclusions are statistically significant.
 
 ```{R}
 # your plot 3
+ggplot(joined_data, aes(x = RelativeEmissionsToMean, y = LifeExpectancy)) + geom_boxplot() + geom_jitter(alpha = 0.6, aes(color = RelativeEmissionsToMean)) + xlab("Relative Emissions to the Mean") + scale_y_continuous(name = "Life Expectancy", breaks = seq(0, 100, 5)) + theme_light() + ggtitle("Relationship Between Life Expectancy and Relative Carbon Emissions")
 ```
 
-Your discussion of plot 3
+The final graph created was a boxplot between relative emissions and life expectancy in order to gauge the health effects of carbon emissions on people around the world. As seen in the graph above, countries with higher relative emissions appear to have a higher life expectancy than those with lower relative emissions. This supports the notion that more developed countries typically have longer life expectancies. However, one cause for concern is the wide range of nations with lower emissions. Using geom_jitter(), the points of each country was plotted on top of the scatterplot. Here, it can be seen that there is almost a normal distribution of life expectancies in this category. It can be assumed that there are other factors that play into these diverse values, so future studies on carbon emissions and health effects should be investigated. It should be noted that the `High` category included the only outlier, which may or may not have influenced the box plot. This is additional cause for further investigation.
 
 #### Concluding Remarks
 
-If any!
+In conclusion, the data above tends to suggest that carbon emissions pose various effects upon the world. My initial predictions were only partly supported by the data, but further investation is warranted. Though these effects cannot be proven to be directly caused by such emissions, it is interesting to consider the possibilities at hand. With these considerations, a deeper look into the dangers of carbon emissions should be performed. 
 
 
 
